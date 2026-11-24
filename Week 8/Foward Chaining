@@ -1,0 +1,173 @@
+# Check whether a term is a variable
+def is_variable(x):
+    return isinstance(x, str) and x.startswith("?")
+
+
+# Apply substitution to an expression
+def substitute(expr, theta):
+    if isinstance(expr, tuple):
+        return tuple(substitute(x, theta) for x in expr)
+
+    while is_variable(expr) and expr in theta:
+        expr = theta[expr]
+
+    return expr
+
+
+# Unification algorithm
+def unify(x, y, theta=None):
+    if theta is None:
+        theta = {}
+
+    x = substitute(x, theta)
+    y = substitute(y, theta)
+
+    if x == y:
+        return theta
+
+    if is_variable(x):
+        theta[x] = y
+        return theta
+
+    if is_variable(y):
+        theta[y] = x
+        return theta
+
+    if isinstance(x, tuple) and isinstance(y, tuple):
+        if len(x) != len(y):
+            return None
+
+        for a, b in zip(x, y):
+            theta = unify(a, b, theta)
+            if theta is None:
+                return None
+
+        return theta
+
+    return None
+
+
+# Standardize variables apart
+def standardize(rule, count):
+    mapping = {}
+
+    def rename(expr):
+        if isinstance(expr, tuple):
+            return tuple(rename(x) for x in expr)
+
+        if is_variable(expr):
+            if expr not in mapping:
+                mapping[expr] = expr + str(count)
+            return mapping[expr]
+
+        return expr
+
+    premises, conclusion = rule
+
+    return (
+        [rename(p) for p in premises],
+        rename(conclusion)
+    )
+
+
+# Find substitutions matching all premises
+def match_all(premises, facts, theta=None):
+    if theta is None:
+        theta = {}
+
+    if not premises:
+        return [theta]
+
+    first = premises[0]
+    results = []
+
+    for fact in facts:
+        new_theta = unify(first, fact, theta.copy())
+
+        if new_theta is not None:
+            remaining = [
+                substitute(p, new_theta)
+                for p in premises[1:]
+            ]
+
+            results.extend(
+                match_all(remaining, facts, new_theta)
+            )
+
+    return results
+
+
+# Forward Chaining Algorithm
+def FOL_FC_ASK(KB, alpha):
+
+    facts, rules = KB
+    count = 0
+
+    # Check whether query is already known
+    for fact in facts:
+        theta = unify(fact, alpha)
+        if theta is not None:
+            return theta
+
+    while True:
+
+        new = []
+
+        for rule in rules:
+
+            count += 1
+
+            # Standardize variables
+            premises, conclusion = standardize(rule, count)
+
+            # Find substitutions satisfying premises
+            substitutions = match_all(premises, facts)
+
+            for theta in substitutions:
+
+                q = substitute(conclusion, theta)
+
+                # Add only new facts
+                if q not in facts and q not in new:
+
+                    new.append(q)
+
+                    # Check whether query can be unified
+                    phi = unify(q, alpha)
+
+                    if phi is not None:
+                        return phi
+
+        # Stop if no new facts are inferred
+        if not new:
+            return False
+
+        # Add newly inferred facts to KB
+        facts.extend(new)
+
+
+# Example Knowledge Base
+
+facts = [
+    ("Parent", "John", "Mary"),
+    ("Parent", "Mary", "Sam")
+]
+
+rules = [
+    (
+        [("Parent", "?x", "?y"),
+         ("Parent", "?y", "?z")],
+        ("Grandparent", "?x", "?z")
+    )
+]
+
+KB = (facts, rules)
+
+# Query
+query = ("Grandparent", "John", "Sam")
+
+# Execute algorithm
+result = FOL_FC_ASK(KB, query)
+
+print("Query:", query)
+print("Result:", result)
