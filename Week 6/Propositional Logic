@@ -1,0 +1,77 @@
+# Check whether a propositional sentence is true in a model
+def PL_TRUE(sentence, model):
+    if isinstance(sentence, str):
+        return model[sentence]
+
+    op = sentence[0]
+
+    if op == 'NOT':
+        return not PL_TRUE(sentence[1], model)
+
+    if op == 'AND':
+        return all(PL_TRUE(s, model) for s in sentence[1:])
+
+    if op == 'OR':
+        return any(PL_TRUE(s, model) for s in sentence[1:])
+
+    if op == 'IMPLIES':
+        return (not PL_TRUE(sentence[1], model)
+                or PL_TRUE(sentence[2], model))
+
+
+# Main function: TT-ENTAILS
+def TT_ENTAILS(KB, alpha):
+    symbols = set()
+
+    def get_symbols(sentence):
+        if isinstance(sentence, str):
+            symbols.add(sentence)
+        else:
+            for s in sentence[1:]:
+                get_symbols(s)
+
+    for sentence in KB:
+        get_symbols(sentence)
+
+    get_symbols(alpha)
+
+    return TT_CHECK_ALL(KB, alpha, list(symbols), {})
+
+
+# Recursive function: TT-CHECK-ALL
+def TT_CHECK_ALL(KB, alpha, symbols, model):
+
+    if len(symbols) == 0:
+
+        if all(PL_TRUE(s, model) for s in KB):
+            return PL_TRUE(alpha, model)
+        else:
+            return True
+
+    P = symbols[0]
+    rest = symbols[1:]
+
+    return (
+        TT_CHECK_ALL(KB, alpha, rest,
+                     {**model, P: True})
+        and
+        TT_CHECK_ALL(KB, alpha, rest,
+                     {**model, P: False})
+    )
+
+
+# Knowledge Base
+KB = [
+    ('IMPLIES', 'Q', 'P'),
+    ('IMPLIES', 'P', ('NOT', 'Q')),
+    ('OR', 'Q', 'R')
+]
+
+# Queries
+print("KB entails R:", TT_ENTAILS(KB, 'R'))
+
+print("KB entails R -> P:",
+      TT_ENTAILS(KB, ('IMPLIES', 'R', 'P')))
+
+print("KB entails Q -> R:",
+      TT_ENTAILS(KB, ('IMPLIES', 'Q', 'R')))
